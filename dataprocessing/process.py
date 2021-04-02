@@ -1,5 +1,9 @@
 from datetime import timedelta
+from itertools import product
+import xgboost as xgb
+
 import numpy as np
+import pandas as pd
 
 
 class TrainTestSplit:
@@ -95,3 +99,84 @@ class Pipeline:
         for name, trans in self.steps:
             X = trans.transform(X)
         return X
+
+    def __str__(self):
+        return "[" + ', \n'.join([f"({', '.join([name, str(obj)[:-30] + '>'])})"
+                                  for name, obj in self.steps]) + "]"
+
+    def __repr__(self):
+        return self.__str__()
+
+
+class GridSearchCVXgb:
+    """
+    Search of the max
+    """
+    def __init__(self, xgb_train_params, param_grid, scoring=None, verbose=False):
+        self.xgb_train_params = xgb_train_params
+        self.param_grid = param_grid
+        self.scoring = scoring
+        self.verbose = verbose
+
+        self.iterator = None
+        self.scores = None
+        self.best_score_ = None
+        self.best_params_ = None
+        self.best_index_ = None
+        self.cv_results_ = None
+        self.cv_results_df_ = None
+        self.best_num_boost_round = None
+        self.best_xgb_train_params = None
+
+    def get_score(self, cv_params):
+        params_ = self.xgb_train_params.copy()
+        for key in cv_params:
+            params_["params"][key] = cv_params[key]
+        bst = xgb.train(**params_)
+        score = bst.best_score
+        num_boost_round = bst.best_ntree_limit
+        return num_boost_round, score
+
+    def fit(self, verbose=None):
+        # initialization
+        if verbose is not None:
+            self.verbose = verbose
+        self.cv_results_ = []
+        self.best_score_ = float("inf")
+        self.best_params_ = None
+        self.best_index_ = None
+        self.best_num_boost_round = None
+        self.best_xgb_train_params = None
+
+        self.iterator = list(product(*self.param_grid.values()))
+        for num, item in enumerate(self.iterator):
+            cv_params = dict(zip(self.param_grid.keys(), item))
+            num_boost_round, score = self.get_score(cv_params)
+            if score < self.best_score_:
+                self.best_score_ = score
+                self.best_params_ = cv_params
+                self.best_index_ = num
+                self.best_num_boost_round = num_boost_round
+
+            self.cv_results_.append(score)
+
+            if self.verbose:
+                if len(self.param_grid) == 1:
+                    print(f"cv_params: {cv_params}, score: {score}")
+                else:
+                    if num == 0:
+                        print("total:", len(self.iterator))
+                    if (num + 1) % 10 == 0:
+                        print(num + 1, end="")
+                    else:
+                        print(".", end="")
+                    if num == len(self.iterator) - 1:
+                        print()
+
+        self.cv_results_ = np.array(self.cv_results_)
+
+        self.cv_results_df_ = pd.DataFrame({"score": self.cv_results_}, index=self.iterator)
+        self.cv_results_df_.index.name = ", ".join(self.param_grid.keys())
+
+        self.best_xgb_train_params = self.xgb_train_params.copy()
+        self.best_xgb_train_params["params"] = self.best_params_
