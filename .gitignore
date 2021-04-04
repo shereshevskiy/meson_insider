@@ -1,6 +1,6 @@
 # my rules
 catboost_info/
-questions.md
+___*
 *.csv
 *.zip
 *.pkl
