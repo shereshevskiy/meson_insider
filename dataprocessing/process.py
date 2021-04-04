@@ -108,15 +108,25 @@ class Pipeline:
         return self.__str__()
 
 
-class GridSearchCVXgb:
+class GridSearchXgb:
     """
     Search of the max
     """
-    def __init__(self, xgb_train_params, param_grid, scoring=None, verbose=False):
+    def __init__(self, xgb_train_params, param_grid, scoring=None, verbose=False, score_fn=None):
+        """
+
+        :param xgb_train_params:
+        :param param_grid:
+        :param scoring:
+        :param verbose:
+        :param score_fn: the custom function from param_grid.keys() that return evaluating score. It is tuple where first
+        point is score and second point is num_boost_round.
+        """
         self.xgb_train_params = xgb_train_params
         self.param_grid = param_grid
         self.scoring = scoring
         self.verbose = verbose
+        self.score_fn = score_fn
 
         self.iterator = None
         self.scores = None
@@ -129,13 +139,16 @@ class GridSearchCVXgb:
         self.best_xgb_train_params = None
 
     def get_score(self, cv_params):
-        params_ = self.xgb_train_params.copy()
-        for key in cv_params:
-            params_["params"][key] = cv_params[key]
-        bst = xgb.train(**params_)
-        score = bst.best_score
-        num_boost_round = bst.best_ntree_limit
-        return num_boost_round, score
+        if self.score_fn is not None:
+            return self.score_fn(cv_params)
+        else:
+            params_ = self.xgb_train_params.copy()
+            for key in cv_params:
+                params_["params"][key] = cv_params[key]
+            bst = xgb.train(**params_)
+            score = bst.best_score
+            num_boost_round = bst.best_ntree_limit
+            return score, num_boost_round
 
     def fit(self, verbose=None):
         # initialization
@@ -151,7 +164,7 @@ class GridSearchCVXgb:
         self.iterator = list(product(*self.param_grid.values()))
         for num, item in enumerate(self.iterator):
             cv_params = dict(zip(self.param_grid.keys(), item))
-            num_boost_round, score = self.get_score(cv_params)
+            score, num_boost_round = self.get_score(cv_params)
             if score < self.best_score_:
                 self.best_score_ = score
                 self.best_params_ = cv_params
