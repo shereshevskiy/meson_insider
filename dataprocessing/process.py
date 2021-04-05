@@ -119,8 +119,8 @@ class GridSearchXgb:
         :param param_grid:
         :param scoring:
         :param verbose:
-        :param score_fn: the custom function from param_grid.keys() that return evaluating score. It is tuple where first
-        point is score and second point is num_boost_round.
+        :param score_fn: the custom function from param_grid.keys() that return evaluating score.
+        It is tuple where first point is score and second point is num_boost_round.
         """
         self.xgb_train_params = xgb_train_params
         self.param_grid = param_grid
